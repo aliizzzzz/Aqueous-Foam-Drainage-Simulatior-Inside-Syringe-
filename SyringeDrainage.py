@@ -8,21 +8,14 @@ Created on Mon Nov 15 12:01:53 2021
 Mathematical simulation of sclerosing foam drainage kinetics inside a syringe during injection
 '''
 # https://towardsdatascience.com/how-to-connect-objects-with-each-other-in-different-situations-with-pythonic-ways-d3aaf4c89553
-import os
-from subprocess import call
+from IPython import get_ipython
+get_ipython().magic('reset -sf') # Reset variable space
 import sys
 from time import sleep
 import math
 import numpy as np
 import matplotlib.pyplot as plt
 plt.style.use('ggplot')
-
-
-def clear():
-    ''' Clears the conosle '''
-    # check and make call for specific operating system
-    _ = call('clear' if os.name == 'posix' else 'cls')
-
 
 class Foam(object):
     ''' Class (composite) Foam taking user input for foam volume. Calculates quasistatic foam drainage kinetic during
@@ -310,6 +303,6 @@ class dataValidation():
 
 
 if __name__ == '__main__':
-    clear()
+    get_ipython().magic('clear') # Clear console
     foamObj = Foam()
     foamObj.simulateInjection()
