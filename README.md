@@ -6,4 +6,4 @@ As mixtured of liquid and gas, sclerosing foams are thermodynamically unstable; 
 
 Typically, sclerosing foams are injected into the patient's veins using a syringe. An gap of information in the literature is:
   
-  "Does the act of injection speed up the rate o ageing?"
+> "Does the act of injection speed up the rate o ageing?"
