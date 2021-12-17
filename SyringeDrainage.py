@@ -14,7 +14,7 @@ from time import sleep
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-get_ipython().magic('reset -sf') # Reset variable space
+get_ipython().magic('reset -sf')  # Reset variable space
 plt.style.use('ggplot')
 
 
