@@ -1,5 +1,5 @@
 # Foam-Drainage-Simulator
-This script needs to be run via an IPython console for most optimum user interface.
+This script needs to be run via an IPython console for the most optimum user experience.
 
 ## Disclaimer
 **This simulation gives the user the option to select two formulation techniques (the Double Syringe System and the Tessari method) and different liquid-to-gas ratios (1:3, 1:4 and 1:5), however, all formulations use the drainage kinetics of 1:4 DSS foams due to lack of data on other formulations. Data for drainage kinetics of other foam formulations will be added in the near future**
