@@ -1,4 +1,5 @@
 # Foam-Drainage-Simulator
+This script needs to be run via an IPython console for most optimum user interface.
 ## The Science:
 [Sclerosing Foams](https://www.riaendovascular.com/services/foam-sclerotherapy/) are mixtures of a surfactant solution with room air that are produced in-house by clinicians and are administered to treat [varicose veins](https://en.wikipedia.org/wiki/Varicose_veins).
 
