@@ -2,7 +2,7 @@
 This script needs to be run via an IPython console for the most optimum user experience.
 
 ## Disclaimer
-**This simulation gives the user the option to select two sclerosing foam formulation techniques (the Double Syringe System and the Tessari method) and different liquid-to-gas ratios (1:3, 1:4 and 1:5), however, all formulations use the drainage kinetics of 1:4 DSS foams due to lack of data on other formulations. Data for drainage kinetics of other foam formulations will be added in the near future**
+**This simulation gives the user the option to select two sclerosing foam formulation techniques (the Double Syringe System and the Tessari method) and different liquid-to-gas ratios (1:3, 1:4 and 1:5), however, all formulations use the drainage kinetics of 1:7 DSS and TSS foams due to lack of data on other formulations. Data for drainage kinetics of other foam formulations will be added in the near future**
 
 ## The Science:
 [Sclerosing Foams](https://www.riaendovascular.com/services/foam-sclerotherapy/) are mixtures of a surfactant solution with room air that are produced in-house by clinicians and are administered to treat [varicose veins](https://en.wikipedia.org/wiki/Varicose_veins).
