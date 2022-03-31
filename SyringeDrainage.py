@@ -14,19 +14,19 @@ from time import sleep
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-get_ipython().magic('reset -sf')  # Reset variable space
-plt.style.use('ggplot')
+import os
+import shutil
 
 
 class Foam(object):
-    ''' Class (composite) Foam taking user input for foam volume. Calculates quasistatic foam drainage kinetic during
-    foam injection inside a syringe (uses an instance of the Syringe class).
+    ''' Class (composite) Foam taking user input for foam volume. Calculates quasistatic foam
+    drainage kinetic during foam injection inside a syringe (uses an instance of the Syringe class).
     Intermediate calculations: liquid length, liquid volume and liquid height.
     Auxilary conditions: maximum liquid height < syringe diameter. '''
 
     def __init__(self):
-        ''' Class constructor. Creates an instance of the Syringe() class, while setting initial values of
-        foam volume (VF), syringe length (L) '''
+        ''' Class constructor. Creates an instance of the Syringe() class, while setting initial
+        values of foam volume (VF), syringe length (L) '''
         print('\r')
         print('Quasi Static Drainage Simulator for Sclerosing Foams\n\n')
         self.syrObj = Syringe()
@@ -38,11 +38,13 @@ class Foam(object):
         self.VL = [x*self.GFraction for x in self.VF]
         self.L = self.syrObj.V*1000/self.syrObj.getSyringeCrossArea()
         self.setTimeParams()
+        self.figs = []
 
     def setFoamHalfTime(self):
-        ''' Invokes the validatedInput function to obtain faom type from user. Sets FHT based on user input '''
-        self.foamType = self.inputValidator.validatedInput('Enter foam type (D/d) for DSS, (T/t) for Tessari: ', str,
-                                                           range_=['t', 'd'])
+        ''' Invokes the validatedInput function to obtain faom type from user. Sets FHT based on
+        user input '''
+        self.foamType = self.inputValidator.validatedInput(
+            'Enter foam type (D/d) for DSS, (T/t) for Tessari:\n>> ', str, range_=['t', 'd'])
         if self.foamType in ['t']:
             self.foamName = 'Tessari'
             self.FHT = 90.0
@@ -52,18 +54,20 @@ class Foam(object):
 
     def setGasFraction(self):
         ''' Takes user input for foam L:G ratio '''
-        self.LG = self.inputValidator.validatedInput('Enter ratio of gas (3,4,5): ', int, range_=[3, 4, 5])
+        self.LG = self.inputValidator.validatedInput('Enter ratio of gas (3,4,5):\n>> ', int,
+                                                     range_=[3, 4, 5])
         self.GFraction = 1/(1+self.LG)
 
     def setFoamVolume(self):
         ''' Takes user input for foam volume in mL '''
-        self.VF = [float(x) for x in self.inputValidator.validatedInput(
-                   f'Enter foam volumes (maximum {self.syrObj.V}) in mL (maximum 4 values, separated with spaces): ',
-                   list, max_=self.syrObj.V)]
+        prompt = f'Enter foam volumes (maximum {self.syrObj.V}) in mL (maximum 4 values, '
+        prompt += 'separated with spaces):\n>> '
+        self.VF = [float(x) for x in
+                   self.inputValidator.validatedInput(prompt, list, max_=self.syrObj.V)]
 
     def setTimeParams(self):
-        ''' Sets the simulation time parameters - simulation time (T), and sampling frequency (Tfrequency in Hz) -
-        for every given flowrate '''
+        ''' Sets the simulation time parameters - simulation time (T), and
+        sampling frequency (Tfrequency in Hz) - for every given flowrate '''
         self.T = [self.syrObj.V/x for x in self.syrObj.Q]
         self.Tfrequency = 20
         self.tdata = [np.linspace(0, x, (int(x)*self.Tfrequency)+1) for x in self.T]
@@ -74,7 +78,8 @@ class Foam(object):
         print('\n\nSetting up...')
         sleep(0.25)
         print(f'\n\nSimulation Paramters\n{50*"="}')
-        print(f'\n{self.syrObj.V} mL syringe class (centric tip) constructed (ID = {self.syrObj.D:.2f} mm)')
+        print(f'\n{self.syrObj.V} mL syringe class (centric tip) constructed')
+        print(f'ID = {self.syrObj.D:.2f} mm')
         print(f'\n1:{self.LG} {self.foamName} foam, half time: {self.FHT} seconds')
         print('Foam volumes: %s mL' % self.VF)
         print('Injection flowrates: %s mL/min\n' % [x*60 for x in self.syrObj.Q])
@@ -89,8 +94,9 @@ class Foam(object):
         ''' Returns liquid height in mm2
         Uses an iterative method to solve for the central angle (theta)
         A list of simulated theta values (0,2π) are used to calculated simulated liquid area values
-        Simulated liquid area values are rounded to 2 d.p., and are checked against the actual liquid areas (2 d.p.)
-        Number of iterations may need to be adjusted to find all solutions for theta'''
+        Simulated liquid area values are rounded to 2 d.p., and are checked against the actual
+        liquid areas (2 d.p.) Number of iterations may need to be adjusted
+        to find all solutions for theta'''
         iterations = 10000
         print(f'\n\nSolving {Q*60} mL/min case (foam volume = {foamVol} mL):\n{50*"-"}')
         print(f'Using {iterations} iterations to solve for central angle...\n')
@@ -126,8 +132,10 @@ class Foam(object):
 
     def getLiquidArea(self, tdata, Q, foamLiquidContent):
         ''' Returns liquid corss-section area in mm2 '''
-        area = [x/y for x, y in zip([w * 1000 for w in self.getLiquidVolume(tdata, foamLiquidContent)],
-                self.getLiquidLength(tdata, Q)) if x/y < self.syrObj.getSyringeCrossArea() and x/y > 0]  # mm2
+        area = [x/y for x, y in zip([w * 1000 for w in self.getLiquidVolume(tdata,
+                                                                            foamLiquidContent)],
+                self.getLiquidLength(tdata, Q))
+                if x/y < self.syrObj.getSyringeCrossArea() and x/y > 0]  # mm2
         return area
 
     def getLiquidLength(self, tdata, Q):
@@ -159,16 +167,19 @@ class Foam(object):
         return area
 
     def calculateHeight(self, syringeDiameter, angle):
-        ''' Calculates height of liquid in a horizontal syrnge given syringeDiameter and central angle '''
+        ''' Calculates height of liquid in a horizontal syrnge given
+        syringeDiameter and central angle '''
         height = (syringeDiameter/2)*(1-math.cos(angle/2))
         return height
 
     def newFigure(self, Q):
         ''' Creates a new figure window '''
-        fig = plt.figure(figsize=[18, 18])
-        fig.suptitle(f'1:{self.LG} {self.foamName} Foam\nInjection flowrate: {Q*60} mL/min', weight='bold', fontsize=30)
+        fig = plt.figure(figsize=[9, 9])
+        fig.suptitle(f'1:{self.LG} {self.foamName} Foam\nInjection flowrate: {Q*60} mL/min',
+                     weight='bold', fontsize=30)
+        self.figs.append(fig)
         ax = plt.gca()
-        return ax
+        return fig, ax
 
     def plotLiquidHeights(self, tdata, hdata, foamVol):
         ''' Plots liquid height results'''
@@ -179,7 +190,8 @@ class Foam(object):
         plt.tick_params(axis='both', which='minor', length=4, width=1)
         plt.xlabel('Injection Time (s)', fontsize=20, labelpad=20)
         plt.ylabel('Liquid Height (mm)', fontsize=20, labelpad=15)
-        plt.legend(ncol=1, prop={'family': 'monospace', 'size': 18}, loc='upper left', handletextpad=0.8)
+        plt.legend(ncol=1, prop={'family': 'monospace', 'size': 18}, loc='upper left',
+                   handletextpad=0.8)
         ax = plt.gca()
         ax.grid(True, linestyle=':', linewidth=1.5, which='minor')
         ax.grid(True, linestyle='-', linewidth=1.7, which='major')
@@ -189,6 +201,22 @@ class Foam(object):
         labels = r'$\mathregular{V_{Foam}}$: %.1f mL' % (foamVol)
         return labels
 
+    def saveFigs(self):
+        userInput = self.inputValidator.validatedInput(
+            'Save plots in current directory (y/n)?\n>> ', str, range_=['', 'y', 'n'])
+        if userInput in ['', 'y']:
+            if os.path.exists(os.getcwd()+'/Figs/'+f'{self.syrObj.V:.0f}mLSyringe'):
+                shutil.rmtree(os.getcwd()+'/Figs/'+f'{self.syrObj.V:.0f}mLSyringe')
+            os.mkdir(os.getcwd()+'/Figs/'+f'{self.syrObj.V:.0f}mLSyringe')
+            for fig in self.figs:
+                title = fig._suptitle.get_text()
+                for s in ['/', ':', ' ', '\n']:
+                    title = title.replace(s, '-')
+                fig.savefig(os.getcwd()+'/Figs/'+f'{self.syrObj.V:.0f}mLSyringe/'+title+'.png',
+                            dpi=450, transparent=False)
+        else:
+            pass
+
     def simulateInjection(self):
         ''' Simulates drainage kinetics inside a syringe of known diameter and volume.
         Calls getLiquidHeight() which initiates the method resolution of simulation.
@@ -197,11 +225,12 @@ class Foam(object):
         self.printMessage()
         self.H = []
         for i in range(0, len(self.syrObj.Q)):
-            ax = self.newFigure(self.syrObj.Q[i])
+            fig, ax = self.newFigure(self.syrObj.Q[i])
+            self.figs.append(fig)
             tempTs = []
             for j in range(0, len(self.VL)):
-                heightAndTimeData = self.getLiquidHeight(self.tdata[i], self.syrObj.Q[i], self.T[i], self.VL[j],
-                                                         self.VF[j])
+                heightAndTimeData = self.getLiquidHeight(self.tdata[i], self.syrObj.Q[i], self.T[i],
+                                                         self.VL[j], self.VF[j])
                 self.H.append(heightAndTimeData[0])
                 tempT = heightAndTimeData[1]
                 tempTs.append(tempT)
@@ -211,11 +240,13 @@ class Foam(object):
 
 
 class Syringe():
-    ''' Class Syringe (component), constructs a syringe object with given diameter, volume and flowrate '''
+    ''' Class Syringe (component), constructs a syringe object with given diameter,
+    volume and flowrate '''
 
     def __init__(self):
-        ''' Class constructor, sets default values of volume (V, mL) and diameter (D, mm) for a
-        10 mL leur-lock NormJect syringe (12 mL), and takes user input for injection rate in mL/min'''
+        ''' Class constructor, sets default values of volume (V, mL) and
+        diameter (D, mm) for a 10 mL leur-lock NormJect syringe (12 mL), and takes
+        user input for injection rate in mL/min'''
 
         self.syringeDiameters = {'20': {'V': 20.0, 'd': 20.10}, '10': {'V': 10.0, 'd': 15.96},
                                  '5': {'V': 5.0, 'd': 12.46}, '3': {'V': 3.0, 'd': 9.83}}
@@ -225,8 +256,8 @@ class Syringe():
     def setSyringe(self):
         ''' Initiates an instance of the Syringe class() '''
         # print('Default syringe: 10 (12) mL NotmJect. Proceed (y/n)?')
-        userInput = self.inputValidator.validatedInput('Default syringe: 10 (12) mL NotmJect. Proceed (y/n)?', str,
-                                                       range_=['', 'y', 'n'])
+        userInput = self.inputValidator.validatedInput(
+            'Default syringe: 10 (12) mL NotmJect. Proceed (y/n)?\n>> ', str, range_=['', 'y', 'n'])
         if userInput in ['', 'y']:
             self.V = self.syringeDiameters['10']['V']
             self.D = self.syringeDiameters['10']['d']
@@ -238,14 +269,15 @@ class Syringe():
     def setSyringeVolume(self):
         ''' Method for user to modify syringe volume in mL'''
 
-        self.V = float(self.inputValidator.validatedInput('Enter syringe volume in mL (20, 10, 5, 3 mL): ', int,
-                                                          range_=[3, 5, 10, 20]))
+        self.V = float(self.inputValidator.validatedInput(
+            'Enter syringe volume in mL (20, 10, 5, 3 mL):\n>> ', int, range_=[3, 5, 10, 20]))
         return self.V
 
     def setFlowrate(self):
         ''' Method sets foam injection rate, takes input in mL/min, stores Q in mL/s '''
         self.Q = [float(x)/60 for x in self.inputValidator.validatedInput(
-            'Enter injection flowrates in mL/min (maximum 6 values, separated with spaces): ', list)]
+            'Enter injection flowrates in mL/min (maximum 6 values, separated with spaces):\n>> ',
+            list)]
 
     def getSyringeCrossArea(self):
         ''' Method returns corss-section area of syringe in mm2 '''
@@ -303,7 +335,11 @@ class dataValidation():
         pass
 
 
+# %% Main
 if __name__ == '__main__':
     get_ipython().magic('clear')  # Clear console
+    get_ipython().magic('reset -sf')  # Reset variable space
+    plt.style.use('ggplot')
     foamObj = Foam()
     foamObj.simulateInjection()
+    foamObj.saveFigs()
