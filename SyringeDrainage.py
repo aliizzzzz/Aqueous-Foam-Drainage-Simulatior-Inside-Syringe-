@@ -16,6 +16,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import shutil
+import time
 
 
 class Foam(object):
@@ -32,9 +33,11 @@ class Foam(object):
         self.syrObj = Syringe()
         self.inputValidator = dataValidation()
         self.setFoamHalfTime()
+        self.setGasFraction()
         self.setFoamVolume()
         self.syrObj.setFlowrate()
-        self.setGasFraction()
+        self.setAccuracy()
+        self.setSampleFreq()
         self.VL = [x*self.GFraction for x in self.VF]
         self.L = self.syrObj.V*1000/self.syrObj.getSyringeCrossArea()
         self.setTimeParams()
@@ -60,24 +63,41 @@ class Foam(object):
 
     def setFoamVolume(self):
         ''' Takes user input for foam volume in mL '''
-        prompt = f'Enter foam volumes (maximum {self.syrObj.V}) in mL (maximum 4 values, '
+        prompt = f'Enter foam volumes (maximum {self.syrObj.V}) in mL (maximum 4 integers, '
         prompt += 'separated with spaces):\n>> '
         self.VF = [float(x) for x in
-                   self.inputValidator.validatedInput(prompt, list, max_=self.syrObj.V)]
+                   self.inputValidator.validatedInput(prompt, list, max_=self.syrObj.V+1e-10)]
 
     def setTimeParams(self):
         ''' Sets the simulation time parameters - simulation time (T), and
         sampling frequency (Tfrequency in Hz) - for every given flowrate '''
-        self.T = [self.syrObj.V/x for x in self.syrObj.Q]
-        self.Tfrequency = 20
-        self.tdata = [np.linspace(0, x, (int(x)*self.Tfrequency)+1) for x in self.T]
-        self.dt = [x[1]-x[0] for x in self.tdata]
+        self.T = {}
+        self.tdata = {}
+        for flow in self.syrObj.Q:
+            self.T[flow] = {}
+            self.tdata[flow] = {}
+            for vol in self.VF:
+                self.T[flow][vol] = vol/flow
+                self.tdata[flow][vol] = np.linspace(0, vol/flow, (int(vol/flow)*self.Tfrequency)+1)
+
+    def setAccuracy(self):
+        ''' Sets the number of decimal points for cross-referencing modelled area and liquid area.
+        Higher values  yield smoother plots, but may take more time.'''
+        self.AccuracyDP = self.inputValidator.validatedInput(
+            'Enter no. of decimal points (maximum 5) for central angle estimation:\n>> ', int,
+            max_=5+1e-10)
+
+    def setSampleFreq(self):
+        ''' Sets the sampling frequency. This defines how many time points are created per second
+        of flow time '''
+        self.Tfrequency = self.inputValidator.validatedInput(
+            'Enter sampling frequency in Hz (maximum 50):\n>> ', int, max_=50+1e-10)
 
     def printMessage(self):
         ''' Prints parameters of constructed simulation '''
         print('\n\nSetting up...')
         sleep(0.25)
-        print(f'\n\nSimulation Paramters\n{50*"="}')
+        print(f'\nSimulation Paramters\n{50*"="}')
         print(f'\n{self.syrObj.V} mL syringe class (centric tip) constructed')
         print(f'ID = {self.syrObj.D:.2f} mm')
         print(f'\n1:{self.LG} {self.foamName} foam, half time: {self.FHT} seconds')
@@ -101,13 +121,14 @@ class Foam(object):
         print(f'\n\nSolving {Q*60} mL/min case (foam volume = {foamVol} mL):\n{50*"-"}')
         print(f'Using {iterations} iterations to solve for central angle...\n')
         while iterations < 500000:
-            areas = [round(x, 2) for x in self.getLiquidArea(tdata, Q, foamLiquidContent)]
+            areas = [round(x, self.AccuracyDP) for x in self.getLiquidArea(tdata, Q,
+                                                                           foamLiquidContent)]
             simulatedThetas = np.linspace(0, 2 * math.pi, iterations)
             thetas = []
             simulatedAreas = []
 
             for theta in simulatedThetas:
-                simArea = round(self.modelArea(theta, self.syrObj.D/2), 2)
+                simArea = round(self.modelArea(theta, self.syrObj.D/2), self.AccuracyDP)
                 simulatedAreas.append(simArea)
 
             for area in areas:
@@ -174,7 +195,7 @@ class Foam(object):
 
     def newFigure(self, Q):
         ''' Creates a new figure window '''
-        fig = plt.figure(figsize=[9, 9])
+        fig = plt.figure(figsize=[12, 9])
         fig.suptitle(f'1:{self.LG} {self.foamName} Foam\nInjection flowrate: {Q*60} mL/min',
                      weight='bold', fontsize=30)
         self.figs.append(fig)
@@ -198,10 +219,14 @@ class Foam(object):
 
     def getDataLabels(self, foamVol):
         ''' returns a list of legend labels for all simulations'''
-        labels = r'$\mathregular{V_{Foam}}$: %.1f mL' % (foamVol)
-        return labels
+        # label = r'$\mathregular{V_{Foam}}$: %.1f mL' % (foamVol)
+        label = r'$\mathregular{V_{Foam}}$: %s mL' % (str(int(foamVol)).zfill(2))
+        return label
 
     def saveFigs(self):
+        print(f'Accuracy: {self.AccuracyDP} Decimal points')
+        print(f'Sampling frequency: {self.Tfrequency: .1f} Hz')
+        print(f'Simulation time: {time.time()-self.start: .2f} s\n')
         userInput = self.inputValidator.validatedInput(
             'Save plots in current directory (y/n)?\n>> ', str, range_=['', 'y', 'n'])
         if userInput in ['', 'y']:
@@ -222,14 +247,16 @@ class Foam(object):
         Calls getLiquidHeight() which initiates the method resolution of simulation.
         User inputs: list of flowrates, list of foam volumes
         Plots a figure for each flowrate '''
+        self.start = time.time()
         self.printMessage()
         self.H = []
-        for i in range(0, len(self.syrObj.Q)):
+        for i, flow in enumerate(self.syrObj.Q):
             fig, ax = self.newFigure(self.syrObj.Q[i])
             self.figs.append(fig)
             tempTs = []
-            for j in range(0, len(self.VL)):
-                heightAndTimeData = self.getLiquidHeight(self.tdata[i], self.syrObj.Q[i], self.T[i],
+            for j, vol in enumerate(self.VF):
+                heightAndTimeData = self.getLiquidHeight(self.tdata[flow][vol], self.syrObj.Q[i],
+                                                         self.T[flow][vol],
                                                          self.VL[j], self.VF[j])
                 self.H.append(heightAndTimeData[0])
                 tempT = heightAndTimeData[1]
@@ -274,10 +301,11 @@ class Syringe():
         return self.V
 
     def setFlowrate(self):
-        ''' Method sets foam injection rate, takes input in mL/min, stores Q in mL/s '''
+        ''' Method sets foam injection rate, takes input in mL/min, stores Q in mL/s.
+        Instantaneous injetion is assumed to occur at 100 mL/min (maximum allowed value)'''
         self.Q = [float(x)/60 for x in self.inputValidator.validatedInput(
-            'Enter injection flowrates in mL/min (maximum 6 values, separated with spaces):\n>> ',
-            list)]
+            'Enter injection flowrates in mL/min (maximum 6 integers, separated with spaces):\n>> ',
+            list, max_=101)]
 
     def getSyringeCrossArea(self):
         ''' Method returns corss-section area of syringe in mm2 '''
@@ -322,7 +350,7 @@ class dataValidation():
                             raise ValueError
                     break
             except self.MaxError:
-                print(f'\nInput must be less than {max_}...')
+                print(f'\nInput must be less than {round(max_,0)}...')
             except ValueError:
                 print('\nInvalid input, try again...')
         if type_ == list:
