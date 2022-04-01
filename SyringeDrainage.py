@@ -39,7 +39,7 @@ class Foam(object):
         self.setAccuracy()
         self.setSampleFreq()
         self.VL = [x*self.GFraction for x in self.VF]
-        self.L = self.syrObj.V*1000/self.syrObj.getSyringeCrossArea()
+        self.setLiquidLength()
         self.setTimeParams()
         self.figs = []
 
@@ -68,18 +68,6 @@ class Foam(object):
         self.VF = [float(x) for x in
                    self.inputValidator.validatedInput(prompt, list, max_=self.syrObj.V+1e-10)]
 
-    def setTimeParams(self):
-        ''' Sets the simulation time parameters - simulation time (T), and
-        sampling frequency (Tfrequency in Hz) - for every given flowrate '''
-        self.T = {}
-        self.tdata = {}
-        for flow in self.syrObj.Q:
-            self.T[flow] = {}
-            self.tdata[flow] = {}
-            for vol in self.VF:
-                self.T[flow][vol] = vol/flow
-                self.tdata[flow][vol] = np.linspace(0, vol/flow, (int(vol/flow)*self.Tfrequency)+1)
-
     def setAccuracy(self):
         ''' Sets the number of decimal points for cross-referencing modelled area and liquid area.
         Higher values  yield smoother plots, but may take more time.'''
@@ -92,6 +80,24 @@ class Foam(object):
         of flow time '''
         self.Tfrequency = self.inputValidator.validatedInput(
             'Enter sampling frequency in Hz (maximum 50):\n>> ', int, max_=50+1e-10)
+
+    def setLiquidLength(self):
+        ''' Calculates initial liquid length corresponding to foam volumes '''
+        self.L = {}
+        for vol in self.VF:
+            self.L[vol] = vol*1000/self.syrObj.getSyringeCrossArea()
+
+    def setTimeParams(self):
+        ''' Sets the simulation time parameters - simulation time (T), and
+        sampling frequency (Tfrequency in Hz) - for every given flowrate '''
+        self.T = {}
+        self.tdata = {}
+        for flow in self.syrObj.Q:
+            self.T[flow] = {}
+            self.tdata[flow] = {}
+            for vol in self.VF:
+                self.T[flow][vol] = vol/flow
+                self.tdata[flow][vol] = np.linspace(0, vol/flow, (int(vol/flow)*self.Tfrequency)+1)
 
     def printMessage(self):
         ''' Prints parameters of constructed simulation '''
@@ -121,14 +127,14 @@ class Foam(object):
         print(f'\n\nSolving {Q*60} mL/min case (foam volume = {foamVol} mL):\n{50*"-"}')
         print(f'Using {iterations} iterations to solve for central angle...\n')
         while iterations < 500000:
-            areas = [round(x, self.AccuracyDP) for x in self.getLiquidArea(tdata, Q,
-                                                                           foamLiquidContent)]
+            areas = [round(x, self.AccuracyDP) for x in
+                     self.getLiquidArea(tdata, Q, foamLiquidContent, foamVol)]
             simulatedThetas = np.linspace(0, 2 * math.pi, iterations)
             thetas = []
             simulatedAreas = []
 
             for theta in simulatedThetas:
-                simArea = round(self.modelArea(theta, self.syrObj.D/2), self.AccuracyDP)
+                simArea = np.round(self.modelArea(theta, self.syrObj.D/2), self.AccuracyDP)
                 simulatedAreas.append(simArea)
 
             for area in areas:
@@ -148,44 +154,46 @@ class Foam(object):
 
         # to simulate liquid exiting the syringe:
         liquidHeight = [self.syrObj.D/2 if x > self.syrObj.D/2 else x for x in liquidHeight]
-        tdata = np.linspace(0, T, (int(T)*self.Tfrequency)+1)[0:len(liquidHeight)]
-        return (liquidHeight, tdata)
+        return liquidHeight
 
-    def getLiquidArea(self, tdata, Q, foamLiquidContent):
+    def getLiquidArea(self, tdata, Q, foamLiquidContent, foamVol):
         ''' Returns liquid corss-section area in mm2 '''
-        area = [x/y for x, y in zip([w * 1000 for w in self.getLiquidVolume(tdata,
-                                                                            foamLiquidContent)],
-                self.getLiquidLength(tdata, Q))
-                if x/y < self.syrObj.getSyringeCrossArea() and x/y > 0]  # mm2
+        lengths = self.getLiquidLength(tdata, Q, foamVol)
+        vols = self.getLiquidVolume(tdata, foamLiquidContent) * 1000  # mm3
+        crossArea = self.syrObj.getSyringeCrossArea()
+        area = [x/y for x, y in zip(vols, lengths) if x/y < crossArea and x/y > 0]  # mm2
         return area
 
-    def getLiquidLength(self, tdata, Q):
+    def getLiquidLength(self, tdata, Q, foamVol):
         ''' Returns length of liquid inside the syringe in mm '''
-        length = self.L
+        length = self.L[foamVol]
         lengths = []
         dt = tdata[1] - tdata[0]
+        crossArea = self.syrObj.getSyringeCrossArea()
         for value in tdata:
-            dl = dt*(-Q*1000)/self.syrObj.getSyringeCrossArea()
+            dl = dt*(-Q*1000)/crossArea
             length += dl
             lengths.append(length)
-        return lengths
+        return np.array(lengths)
 
     def getLiquidVolume(self, tdata, foamLiquidContent):
         ''' Calculates liquid volume based on foam drainage kinetics. Returns liquid volume in mL '''
         drainedLiquidVol = 0
         volumes = []
         dt = tdata[1] - tdata[0]
+        numberOfhalfLives = dt/self.FHT
         for value in tdata:
-            dv = dt*foamLiquidContent/(2*self.FHT)
+            fractionRemained = (1/2)**numberOfhalfLives
+            dv = (1-fractionRemained)*foamLiquidContent
             foamLiquidContent -= dv
             drainedLiquidVol += dv
             volumes.append(drainedLiquidVol)
-        return volumes
+        return np.array(volumes)
 
     def modelArea(self, theta, radius):
         ''' Models cross section area of syringe occupied by the accumulating drained liquid '''
         area = ((radius ** 2) / 2) * (theta-math.sin(theta))
-        return area
+        return np.array(area)
 
     def calculateHeight(self, syringeDiameter, angle):
         ''' Calculates height of liquid in a horizontal syrnge given
@@ -211,7 +219,7 @@ class Foam(object):
         plt.tick_params(axis='both', which='minor', length=4, width=1)
         plt.xlabel('Injection Time (s)', fontsize=20, labelpad=20)
         plt.ylabel('Liquid Height (mm)', fontsize=20, labelpad=15)
-        plt.legend(ncol=1, prop={'family': 'monospace', 'size': 18}, loc='upper left',
+        plt.legend(ncol=1, prop={'family': 'monospace', 'size': 18}, loc='lower right',
                    handletextpad=0.8)
         ax = plt.gca()
         ax.grid(True, linestyle=':', linewidth=1.5, which='minor')
@@ -249,19 +257,20 @@ class Foam(object):
         Plots a figure for each flowrate '''
         self.start = time.time()
         self.printMessage()
-        self.H = []
+        self.H = {}
         for i, flow in enumerate(self.syrObj.Q):
+            self.H[flow] = {}
             fig, ax = self.newFigure(self.syrObj.Q[i])
             self.figs.append(fig)
-            tempTs = []
             for j, vol in enumerate(self.VF):
                 heightAndTimeData = self.getLiquidHeight(self.tdata[flow][vol], self.syrObj.Q[i],
                                                          self.T[flow][vol],
                                                          self.VL[j], self.VF[j])
-                self.H.append(heightAndTimeData[0])
-                tempT = heightAndTimeData[1]
-                tempTs.append(tempT)
-                self.plotLiquidHeights(tempT, self.H[-1], self.VF[j])
+                tempH = heightAndTimeData
+                tempH += (len(self.tdata[flow][vol]) -
+                          len(heightAndTimeData)) * [self.syrObj.D/2]
+                self.H[flow][vol] = tempH
+                self.plotLiquidHeights(self.tdata[flow][vol], self.H[flow][vol], self.VF[j])
             ax.set_ylim(bottom=0)
             ax.set_xlim(left=0)
 
